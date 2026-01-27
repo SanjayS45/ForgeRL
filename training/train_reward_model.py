@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""
-Train reward model on preference dataset.
-
-Usage:
-    python training/train_reward_model.py --data experiments/trajs.pkl
-    python training/train_reward_model.py --data experiments/trajs.pkl --epochs 100 --batch-size 64
-"""
 
 import argparse
 import sys
@@ -21,7 +14,6 @@ from utils.data_utils import load_dataset, split_dataset, compute_stats
 from utils.instruction_encoder import encode_instruction
 from reward_model.model import RewardModelWithSentenceEncoder
 from reward_model.trainer import RewardModelTrainer
-
 
 def main():
     parser = argparse.ArgumentParser(description="Train reward model")
@@ -86,30 +78,30 @@ def main():
     
     args = parser.parse_args()
     
-    # Set seeds
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     
-    # Device
+
     if args.device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
     print(f"Using device: {device}")
     
-    # Load data
+
     print(f"\nLoading dataset from {args.data}...")
     data = load_dataset(args.data)
     
     stats = compute_stats(data)
     print(f"\n{stats}")
     
-    # Check minimum pairs
+
     if stats.num_pairs < 100:
         print(f"\nWARNING: Only {stats.num_pairs} pairs. Recommend at least 1000 for good results.")
         
-    # Split data
+
     test_ratio = 1.0 - args.train_split - args.val_split
     train_data, val_data, test_data = split_dataset(
         data,
@@ -120,12 +112,12 @@ def main():
     )
     print(f"\nSplit: train={len(train_data)}, val={len(val_data)}, test={len(test_data)}")
     
-    # Create model
+
     print("\nCreating reward model...")
     model = RewardModelWithSentenceEncoder(
         obs_dim=stats.obs_dim,
         act_dim=stats.act_dim,
-        instr_dim=384,  # Sentence transformer dimension
+        instr_dim=384,
         hidden_dim=args.hidden_dim,
         num_layers=args.num_layers,
         use_attention=True,
@@ -135,7 +127,7 @@ def main():
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model parameters: {total_params:,} total, {trainable_params:,} trainable")
     
-    # Create trainer
+
     trainer = RewardModelTrainer(
         model=model,
         device=device,
@@ -144,7 +136,7 @@ def main():
         use_sentence_encoder=True,
     )
     
-    # Train
+
     print(f"\nStarting training for {args.epochs} epochs...")
     history = trainer.train(
         train_data=train_data,
@@ -157,7 +149,7 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
     )
     
-    # Print final results
+
     print("\n" + "=" * 50)
     print("Training Complete!")
     print("=" * 50)
@@ -170,7 +162,7 @@ def main():
     final_train_acc = history["train_accuracy"][-1]
     print(f"Final Training Accuracy: {final_train_acc:.4f}")
     
-    # Save history
+
     import json
     history_path = Path(args.checkpoint_dir) / "history.json"
     with open(history_path, "w") as f:
@@ -178,7 +170,6 @@ def main():
     print(f"\nSaved training history to {history_path}")
     
     print(f"Checkpoints saved to {args.checkpoint_dir}/")
-
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,3 @@
-"""
-Training utilities for reward models.
-"""
-
 import torch
 import torch.nn as nn
 from torch.optim import Adam, AdamW
@@ -19,11 +15,8 @@ from reward_model.model import (
     compute_accuracy,
 )
 
-
 class PreferenceDataset(Dataset):
-    """
-    PyTorch Dataset for trajectory preferences.
-    """
+    
     
     def __init__(
         self,
@@ -32,29 +25,23 @@ class PreferenceDataset(Dataset):
         max_length: Optional[int] = None,
         use_sentence_encoder: bool = True,
     ):
-        """
-        Args:
-            data: List of (instruction, traj_a, traj_b) tuples
-            instruction_encoder: Function to encode instructions
-            max_length: Maximum trajectory length (pad/truncate)
-            use_sentence_encoder: Whether encoder returns embeddings (True) or IDs (False)
-        """
+        
         self.data = data
         self.instruction_encoder = instruction_encoder
         self.max_length = max_length
         self.use_sentence_encoder = use_sentence_encoder
         
-        # Precompute instruction encodings
+
         self.instructions = [d[0] for d in data]
         self.instr_encodings = self._encode_instructions()
         
     def _encode_instructions(self):
-        """Pre-encode all instructions."""
+        
         if self.use_sentence_encoder:
-            # Batch encode for efficiency
+
             return self.instruction_encoder(self.instructions)
         else:
-            # Integer IDs
+
             return [self.instruction_encoder(instr) for instr in self.instructions]
             
     def __len__(self):
@@ -63,18 +50,17 @@ class PreferenceDataset(Dataset):
     def __getitem__(self, idx):
         instr, traj_a, traj_b = self.data[idx]
         
-        # Convert trajectories to tensors
+
         obs_a, act_a, len_a = self._process_trajectory(traj_a)
         obs_b, act_b, len_b = self._process_trajectory(traj_b)
         
-        # Get instruction encoding
+
         if self.use_sentence_encoder:
             instr_enc = torch.tensor(self.instr_encodings[idx], dtype=torch.float32)
         else:
             instr_enc = torch.tensor(self.instr_encodings[idx], dtype=torch.long)
             
-        # Compute synthetic preference (for now, based on trajectory score)
-        # In real RLHF, this would come from human labels
+
         preference = self._compute_preference(traj_a, traj_b)
         
         return {
@@ -89,12 +75,12 @@ class PreferenceDataset(Dataset):
         }
         
     def _process_trajectory(self, traj):
-        """Convert trajectory to padded tensors."""
+        
         obs = np.array([t[0] for t in traj], dtype=np.float32)
         act = np.array([t[1] for t in traj], dtype=np.float32)
         length = len(traj)
         
-        # Pad or truncate
+
         if self.max_length is not None:
             if length > self.max_length:
                 obs = obs[:self.max_length]
@@ -113,24 +99,19 @@ class PreferenceDataset(Dataset):
         )
         
     def _compute_preference(self, traj_a, traj_b) -> int:
-        """
-        Compute synthetic preference based on trajectory quality.
         
-        Returns 0 if A is preferred, 1 if B is preferred.
-        """
         from preferences.synthetic import preference
         return preference(traj_a, traj_b)
 
-
 def collate_fn(batch):
-    """Custom collate function for variable-length trajectories."""
-    # Find max length in batch
+    
+
     max_len = max(
         max(b["len_a"] for b in batch),
         max(b["len_b"] for b in batch),
     )
     
-    # Pad all trajectories to max length
+
     obs_a = []
     act_a = []
     mask_a = []
@@ -141,7 +122,7 @@ def collate_fn(batch):
     preferences = []
     
     for b in batch:
-        # Trajectory A
+
         len_a = b["obs_a"].shape[0]
         if len_a < max_len:
             pad_a = torch.zeros(max_len - len_a, b["obs_a"].shape[1])
@@ -153,7 +134,7 @@ def collate_fn(batch):
             act_a.append(b["act_a"][:max_len])
         mask_a.append(torch.arange(max_len) < b["len_a"])
         
-        # Trajectory B
+
         len_b = b["obs_b"].shape[0]
         if len_b < max_len:
             pad_b = torch.zeros(max_len - len_b, b["obs_b"].shape[1])
@@ -179,11 +160,8 @@ def collate_fn(batch):
         "preference": torch.tensor(preferences, dtype=torch.long),
     }
 
-
 class RewardModelTrainer:
-    """
-    Trainer for reward models with preference learning.
-    """
+    
     
     def __init__(
         self,
@@ -224,29 +202,13 @@ class RewardModelTrainer:
         checkpoint_dir: str = "checkpoints",
         log_interval: int = 10,
     ) -> Dict:
-        """
-        Train the reward model.
         
-        Args:
-            train_data: Training preference pairs
-            val_data: Validation preference pairs
-            instruction_encoder: Function to encode instructions
-            epochs: Number of training epochs
-            batch_size: Batch size
-            max_trajectory_length: Max trajectory length for padding
-            early_stopping_patience: Patience for early stopping
-            checkpoint_dir: Directory for saving checkpoints
-            log_interval: Logging interval (batches)
-            
-        Returns:
-            Training history dict
-        """
-        # Default encoder
+
         if instruction_encoder is None:
             from utils.instruction_encoder import encode_instruction
             instruction_encoder = encode_instruction
             
-        # Create datasets
+
         train_dataset = PreferenceDataset(
             train_data,
             instruction_encoder,
@@ -278,18 +240,18 @@ class RewardModelTrainer:
                 num_workers=0,
             )
             
-        # Setup scheduler
+
         self.scheduler = CosineAnnealingLR(
             self.optimizer,
             T_max=epochs,
             eta_min=1e-6,
         )
         
-        # Create checkpoint directory
+
         checkpoint_path = Path(checkpoint_dir)
         checkpoint_path.mkdir(parents=True, exist_ok=True)
         
-        # Training history
+
         history = {
             "train_loss": [],
             "train_accuracy": [],
@@ -297,25 +259,25 @@ class RewardModelTrainer:
             "val_accuracy": [],
         }
         
-        # Training loop
+
         for epoch in range(epochs):
-            # Train epoch
+
             train_metrics = self._train_epoch(train_loader, log_interval)
             history["train_loss"].append(train_metrics["loss"])
             history["train_accuracy"].append(train_metrics["accuracy"])
             
-            # Validate
+
             if val_loader:
                 val_metrics = self._validate(val_loader)
                 history["val_loss"].append(val_metrics["loss"])
                 history["val_accuracy"].append(val_metrics["accuracy"])
                 
-                # Early stopping check
+
                 if val_metrics["accuracy"] > self.best_accuracy:
                     self.best_accuracy = val_metrics["accuracy"]
                     self.patience_counter = 0
                     
-                    # Save best model
+
                     self.save(checkpoint_path / "best_model.pt")
                 else:
                     self.patience_counter += 1
@@ -340,13 +302,13 @@ class RewardModelTrainer:
                 
             self.scheduler.step()
             
-        # Save final model
+
         self.save(checkpoint_path / "final_model.pt")
         
         return history
         
     def _train_epoch(self, loader, log_interval) -> Dict:
-        """Train for one epoch."""
+        
         self.model.train()
         
         total_loss = 0.0
@@ -355,7 +317,7 @@ class RewardModelTrainer:
         
         pbar = tqdm(loader, desc="Training")
         for batch_idx, batch in enumerate(pbar):
-            # Move to device
+
             obs_a = batch["obs_a"].to(self.device)
             act_a = batch["act_a"].to(self.device)
             mask_a = batch["mask_a"].to(self.device)
@@ -365,7 +327,7 @@ class RewardModelTrainer:
             instr = batch["instruction"].to(self.device)
             pref = batch["preference"].to(self.device)
             
-            # Forward pass
+
             if self.use_sentence_encoder:
                 reward_a = self.model(obs_a, act_a, instr, mask_a)
                 reward_b = self.model(obs_b, act_b, instr, mask_b)
@@ -373,18 +335,18 @@ class RewardModelTrainer:
                 reward_a = self.model(obs_a, act_a, instr)
                 reward_b = self.model(obs_b, act_b, instr)
                 
-            # Compute loss
+
             loss = compute_preference_loss(
                 reward_a, reward_b, pref, self.loss_type
             )
             
-            # Backward pass
+
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
             
-            # Track metrics
+
             total_loss += loss.item() * len(pref)
             predicted = (reward_b > reward_a).long()
             total_correct += (predicted == pref).sum().item()
@@ -402,7 +364,7 @@ class RewardModelTrainer:
         }
         
     def _validate(self, loader) -> Dict:
-        """Validate the model."""
+        
         self.model.eval()
         
         total_loss = 0.0
@@ -411,7 +373,7 @@ class RewardModelTrainer:
         
         with torch.no_grad():
             for batch in loader:
-                # Move to device
+
                 obs_a = batch["obs_a"].to(self.device)
                 act_a = batch["act_a"].to(self.device)
                 mask_a = batch["mask_a"].to(self.device)
@@ -421,7 +383,7 @@ class RewardModelTrainer:
                 instr = batch["instruction"].to(self.device)
                 pref = batch["preference"].to(self.device)
                 
-                # Forward pass
+
                 if self.use_sentence_encoder:
                     reward_a = self.model(obs_a, act_a, instr, mask_a)
                     reward_b = self.model(obs_b, act_b, instr, mask_b)
@@ -429,12 +391,12 @@ class RewardModelTrainer:
                     reward_a = self.model(obs_a, act_a, instr)
                     reward_b = self.model(obs_b, act_b, instr)
                     
-                # Compute loss
+
                 loss = compute_preference_loss(
                     reward_a, reward_b, pref, self.loss_type
                 )
                 
-                # Track metrics
+
                 total_loss += loss.item() * len(pref)
                 predicted = (reward_b > reward_a).long()
                 total_correct += (predicted == pref).sum().item()
@@ -446,7 +408,7 @@ class RewardModelTrainer:
         }
         
     def save(self, path: str):
-        """Save model checkpoint."""
+        
         torch.save({
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -455,7 +417,7 @@ class RewardModelTrainer:
         print(f"Saved checkpoint to {path}")
         
     def load(self, path: str):
-        """Load model checkpoint."""
+        
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])

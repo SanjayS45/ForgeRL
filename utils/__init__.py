@@ -1,7 +1,3 @@
-"""
-Utility functions for RLHF pipeline.
-"""
-
 from utils.instruction_encoder import encode_instruction, InstructionEncoder
 from utils.data_utils import (
     load_dataset,

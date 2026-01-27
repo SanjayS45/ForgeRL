@@ -31,7 +31,6 @@ body {
   min-height: 100vh;
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -50,7 +49,6 @@ body {
   background: var(--accent-green-dim);
 }
 
-/* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -74,7 +72,6 @@ body {
   animation: pulse-green 2s ease-in-out infinite;
 }
 
-/* Card styles */
 .card {
   background: linear-gradient(135deg, rgba(10, 18, 10, 0.95), rgba(5, 5, 5, 0.95));
   backdrop-filter: blur(10px);
@@ -86,7 +83,6 @@ body {
   border-color: rgba(0, 255, 106, 0.25);
 }
 
-/* Button styles */
 .btn-primary {
   background: linear-gradient(135deg, #00ff6a, #00cc55);
   color: #000;
@@ -107,7 +103,6 @@ body {
   transform: none;
 }
 
-/* Input styles */
 input, select {
   background: rgba(0, 0, 0, 0.5) !important;
   border: 1px solid rgba(0, 255, 106, 0.2) !important;
@@ -121,7 +116,6 @@ input:focus, select:focus {
   outline: none !important;
 }
 
-/* Range slider */
 input[type="range"] {
   -webkit-appearance: none;
   background: transparent;
@@ -144,7 +138,6 @@ input[type="range"]::-webkit-slider-thumb {
   margin-top: -6px;
 }
 
-/* Grid pattern background */
 .grid-bg {
   background-image: 
     linear-gradient(rgba(0, 255, 106, 0.03) 1px, transparent 1px),
@@ -152,7 +145,6 @@ input[type="range"]::-webkit-slider-thumb {
   background-size: 50px 50px;
 }
 
-/* Glow effects */
 .glow-green {
   box-shadow: 0 0 20px rgba(0, 255, 106, 0.3);
 }

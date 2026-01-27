@@ -1,7 +1,3 @@
-"""
-Neural network architectures for RL policies.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,20 +5,14 @@ from torch.distributions import Normal
 import numpy as np
 from typing import Tuple, Optional
 
-
 def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.0):
-    """Initialize layer with orthogonal weights."""
+    
     nn.init.orthogonal_(layer.weight, std)
     nn.init.constant_(layer.bias, bias_const)
     return layer
 
-
 class Actor(nn.Module):
-    """
-    Actor network for continuous action spaces.
     
-    Outputs mean and log_std for Gaussian policy.
-    """
     
     def __init__(
         self,
@@ -38,7 +28,7 @@ class Actor(nn.Module):
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
         
-        # Build MLP
+
         layers = []
         input_dim = obs_dim
         
@@ -49,21 +39,12 @@ class Actor(nn.Module):
             
         self.trunk = nn.Sequential(*layers)
         
-        # Output heads
+
         self.mean_head = layer_init(nn.Linear(hidden_dim, act_dim), std=0.01)
         self.log_std_head = layer_init(nn.Linear(hidden_dim, act_dim), std=0.01)
         
     def forward(self, obs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass.
         
-        Args:
-            obs: Observations (B, obs_dim)
-            
-        Returns:
-            mean: Action means (B, act_dim)
-            log_std: Log standard deviations (B, act_dim)
-        """
         h = self.trunk(obs)
         mean = self.mean_head(h)
         log_std = self.log_std_head(h)
@@ -75,18 +56,7 @@ class Actor(nn.Module):
         obs: torch.Tensor,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Sample action from policy.
         
-        Args:
-            obs: Observations
-            deterministic: Use mean action if True
-            
-        Returns:
-            action: Sampled action
-            log_prob: Log probability of action
-            mean: Mean action
-        """
         mean, log_std = self.forward(obs)
         std = log_std.exp()
         
@@ -98,20 +68,17 @@ class Actor(nn.Module):
             action = dist.rsample()
             log_prob = dist.log_prob(action).sum(dim=-1)
             
-        # Squash to [-1, 1]
+
         action = torch.tanh(action)
         
-        # Correct log_prob for tanh squashing
+
         if log_prob is not None:
             log_prob = log_prob - (2 * (np.log(2) - action - F.softplus(-2 * action))).sum(dim=-1)
             
         return action, log_prob, mean
 
-
 class Critic(nn.Module):
-    """
-    Critic network (value function).
-    """
+    
     
     def __init__(
         self,
@@ -134,22 +101,11 @@ class Critic(nn.Module):
         self.net = nn.Sequential(*layers)
         
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        """
-        Predict state value.
         
-        Args:
-            obs: Observations (B, obs_dim)
-            
-        Returns:
-            value: State values (B,)
-        """
         return self.net(obs).squeeze(-1)
 
-
 class ActorCritic(nn.Module):
-    """
-    Combined Actor-Critic network for PPO.
-    """
+    
     
     def __init__(
         self,
@@ -164,7 +120,7 @@ class ActorCritic(nn.Module):
         self.shared_backbone = shared_backbone
         
         if shared_backbone:
-            # Shared feature extractor
+
             layers = []
             input_dim = obs_dim
             for i in range(num_layers - 1):
@@ -173,7 +129,7 @@ class ActorCritic(nn.Module):
                 input_dim = hidden_dim
             self.backbone = nn.Sequential(*layers)
             
-            # Separate heads
+
             self.actor_head = nn.Sequential(
                 layer_init(nn.Linear(hidden_dim, hidden_dim)),
                 nn.Tanh(),
@@ -196,14 +152,7 @@ class ActorCritic(nn.Module):
         self,
         obs: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Forward pass.
         
-        Returns:
-            mean: Action mean
-            log_std: Action log std
-            value: State value
-        """
         if self.shared_backbone:
             features = self.backbone(obs)
             
@@ -225,20 +174,7 @@ class ActorCritic(nn.Module):
         action: Optional[torch.Tensor] = None,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Get action, log prob, entropy, and value.
         
-        Args:
-            obs: Observations
-            action: Optional action (for computing log prob of given action)
-            deterministic: Use mean action if True
-            
-        Returns:
-            action: Action tensor
-            log_prob: Log probability
-            entropy: Distribution entropy
-            value: State value
-        """
         mean, log_std, value = self.forward(obs)
         std = log_std.exp()
         
@@ -253,14 +189,14 @@ class ActorCritic(nn.Module):
         log_prob = dist.log_prob(action).sum(dim=-1)
         entropy = dist.entropy().sum(dim=-1)
         
-        # Tanh squashing
+
         action_squashed = torch.tanh(action)
         log_prob = log_prob - (2 * (np.log(2) - action - F.softplus(-2 * action))).sum(dim=-1)
         
         return action_squashed, log_prob, entropy, value
         
     def get_value(self, obs: torch.Tensor) -> torch.Tensor:
-        """Get state value only."""
+        
         if self.shared_backbone:
             features = self.backbone(obs)
             return self.critic_head(features).squeeze(-1)

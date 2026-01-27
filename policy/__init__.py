@@ -1,7 +1,3 @@
-"""
-RL Policy components for RLHF.
-"""
-
 from policy.ppo import PPOAgent, PPOTrainer
 from policy.networks import Actor, Critic, ActorCritic
 

@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""
-Train RL policy using learned reward model.
-
-Usage:
-    python training/train_policy.py --task reach-v3
-    python training/train_policy.py --reward-model checkpoints/reward_model/best_model.pt
-"""
 
 import argparse
 import sys
@@ -23,14 +16,13 @@ from policy.ppo import PPOAgent, PPOTrainer
 from reward_model.model import RewardModelWithSentenceEncoder
 from utils.instruction_encoder import encode_instruction
 
-
 def load_reward_model(
     checkpoint_path: str,
     obs_dim: int = 39,
     act_dim: int = 4,
     device: str = "cpu",
 ) -> RewardModelWithSentenceEncoder:
-    """Load trained reward model."""
+    
     model = RewardModelWithSentenceEncoder(
         obs_dim=obs_dim,
         act_dim=act_dim,
@@ -45,7 +37,6 @@ def load_reward_model(
     
     print(f"Loaded reward model from {checkpoint_path}")
     return model
-
 
 def main():
     parser = argparse.ArgumentParser(description="Train RL policy with reward model")
@@ -129,19 +120,19 @@ def main():
     
     args = parser.parse_args()
     
-    # Set seeds
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     
-    # Device
+
     if args.device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
     print(f"Using device: {device}")
     
-    # Create environment
+
     print(f"\nCreating environment: {args.task}")
     env = make_metaworld_env(task_name=args.task, seed=args.seed)
     
@@ -150,7 +141,7 @@ def main():
     print(f"Observation dim: {obs_dim}")
     print(f"Action dim: {act_dim}")
     
-    # Load reward model if specified
+
     reward_model = None
     instruction = args.instruction
     
@@ -166,7 +157,7 @@ def main():
             instruction = sample_instruction(args.task)
         print(f"Instruction: {instruction}")
         
-    # Create agent
+
     print("\nCreating PPO agent...")
     agent = PPOAgent(
         obs_dim=obs_dim,
@@ -181,7 +172,7 @@ def main():
     total_params = sum(p.numel() for p in agent.actor_critic.parameters())
     print(f"Policy parameters: {total_params:,}")
     
-    # Create trainer
+
     trainer = PPOTrainer(
         env=env,
         agent=agent,
@@ -193,7 +184,7 @@ def main():
         log_dir=args.log_dir,
     )
     
-    # Train
+
     print(f"\nStarting training for {args.total_steps:,} timesteps...")
     print(f"Updates: {args.total_steps // args.steps_per_update}")
     
@@ -207,7 +198,7 @@ def main():
         checkpoint_freq=args.checkpoint_freq,
     )
     
-    # Print results
+
     print("\n" + "=" * 50)
     print("Training Complete!")
     print("=" * 50)
@@ -221,7 +212,6 @@ def main():
     print(f"\nSaved to {args.log_dir}/")
     
     env.close()
-
 
 if __name__ == "__main__":
     main()

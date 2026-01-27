@@ -1,7 +1,3 @@
-"""
-Data utilities for loading, saving, and preprocessing trajectory datasets.
-"""
-
 import pickle
 import json
 import csv
@@ -12,16 +8,13 @@ from dataclasses import dataclass
 import numpy as np
 from tqdm import tqdm
 
-
-# Type aliases
-Trajectory = List[Tuple[np.ndarray, np.ndarray]]  # List of (obs, action) pairs
-PreferencePair = Tuple[str, Trajectory, Trajectory]  # (instruction, good_traj, bad_traj)
+Trajectory = List[Tuple[np.ndarray, np.ndarray]]
+PreferencePair = Tuple[str, Trajectory, Trajectory]
 Dataset = List[PreferencePair]
-
 
 @dataclass
 class DatasetStats:
-    """Statistics about a preference dataset."""
+    
     num_pairs: int
     num_unique_instructions: int
     avg_trajectory_length: float
@@ -42,22 +35,8 @@ class DatasetStats:
             f"  Action Dim: {self.act_dim}"
         )
 
-
 def load_dataset(path: Union[str, Path]) -> Dataset:
-    """
-    Load a preference dataset from file.
     
-    Supports:
-    - .pkl/.pickle files (pickled Python objects)
-    - .json files (JSON format)
-    - .csv files (CSV with base64-encoded trajectories)
-    
-    Args:
-        path: Path to dataset file
-        
-    Returns:
-        List of (instruction, good_traj, bad_traj) tuples
-    """
     path = Path(path)
     
     if not path.exists():
@@ -71,7 +50,7 @@ def load_dataset(path: Union[str, Path]) -> Dataset:
     elif suffix == ".json":
         with open(path, "r") as f:
             data = json.load(f)
-        # Convert JSON lists back to numpy arrays
+
         data = _json_to_numpy(data)
     elif suffix == ".csv":
         data = _load_csv(path)
@@ -80,16 +59,8 @@ def load_dataset(path: Union[str, Path]) -> Dataset:
         
     return data
 
-
 def save_dataset(data: Dataset, path: Union[str, Path], format: str = "pickle"):
-    """
-    Save a preference dataset to file.
     
-    Args:
-        data: List of (instruction, good_traj, bad_traj) tuples
-        path: Output path
-        format: 'pickle', 'json', or 'csv'
-    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -107,17 +78,8 @@ def save_dataset(data: Dataset, path: Union[str, Path], format: str = "pickle"):
         
     print(f"Saved {len(data)} pairs to {path}")
 
-
 def validate_dataset(data: Dataset) -> Tuple[bool, List[str]]:
-    """
-    Validate a preference dataset.
     
-    Args:
-        data: Dataset to validate
-        
-    Returns:
-        (is_valid, list_of_errors)
-    """
     errors = []
     
     if not isinstance(data, list):
@@ -155,17 +117,8 @@ def validate_dataset(data: Dataset) -> Tuple[bool, List[str]]:
     is_valid = len(errors) == 0
     return is_valid, errors
 
-
 def compute_stats(data: Dataset) -> DatasetStats:
-    """
-    Compute statistics for a dataset.
     
-    Args:
-        data: Preference dataset
-        
-    Returns:
-        DatasetStats object
-    """
     if not data:
         raise ValueError("Empty dataset")
         
@@ -194,28 +147,16 @@ def compute_stats(data: Dataset) -> DatasetStats:
         instructions=sorted(instructions),
     )
 
-
 def preprocess_dataset(
     data: Dataset,
     max_length: Optional[int] = None,
     normalize_obs: bool = False,
     normalize_actions: bool = False,
 ) -> Dataset:
-    """
-    Preprocess a dataset.
     
-    Args:
-        data: Raw dataset
-        max_length: Truncate trajectories to this length
-        normalize_obs: Normalize observations to [-1, 1]
-        normalize_actions: Normalize actions to [-1, 1]
-        
-    Returns:
-        Preprocessed dataset
-    """
     processed = []
     
-    # Compute normalization stats if needed
+
     if normalize_obs or normalize_actions:
         all_obs = []
         all_acts = []
@@ -235,7 +176,7 @@ def preprocess_dataset(
             act_std = all_acts.std(axis=0) + 1e-8
     
     for instr, traj_a, traj_b in tqdm(data, desc="Preprocessing"):
-        # Process trajectories
+
         new_traj_a = _process_trajectory(
             traj_a, max_length,
             obs_mean if normalize_obs else None,
@@ -255,7 +196,6 @@ def preprocess_dataset(
         
     return processed
 
-
 def _process_trajectory(
     traj: Trajectory,
     max_length: Optional[int],
@@ -264,12 +204,12 @@ def _process_trajectory(
     act_mean: Optional[np.ndarray],
     act_std: Optional[np.ndarray],
 ) -> Trajectory:
-    """Process a single trajectory."""
-    # Truncate if needed
+    
+
     if max_length is not None:
         traj = traj[:max_length]
         
-    # Normalize
+
     new_traj = []
     for obs, act in traj:
         obs = np.array(obs, dtype=np.float32)
@@ -284,7 +224,6 @@ def _process_trajectory(
         
     return new_traj
 
-
 def split_dataset(
     data: Dataset,
     train_ratio: float = 0.8,
@@ -292,19 +231,7 @@ def split_dataset(
     test_ratio: float = 0.1,
     seed: int = 42,
 ) -> Tuple[Dataset, Dataset, Dataset]:
-    """
-    Split dataset into train/val/test.
     
-    Args:
-        data: Full dataset
-        train_ratio: Fraction for training
-        val_ratio: Fraction for validation
-        test_ratio: Fraction for testing
-        seed: Random seed
-        
-    Returns:
-        (train_data, val_data, test_data)
-    """
     assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6
     
     np.random.seed(seed)
@@ -323,26 +250,22 @@ def split_dataset(
     
     return train_data, val_data, test_data
 
-
 def shuffle_dataset(data: Dataset, seed: Optional[int] = None) -> Dataset:
-    """Shuffle dataset."""
+    
     if seed is not None:
         np.random.seed(seed)
     indices = np.random.permutation(len(data))
     return [data[i] for i in indices]
 
-
 def merge_datasets(*datasets: Dataset) -> Dataset:
-    """Merge multiple datasets."""
+    
     merged = []
     for d in datasets:
         merged.extend(d)
     return merged
 
-
-# Helper functions for JSON serialization
 def _numpy_to_json(data: Dataset) -> List:
-    """Convert numpy arrays to JSON-serializable format."""
+    
     json_data = []
     for instr, traj_a, traj_b in data:
         json_traj_a = [(obs.tolist(), act.tolist()) for obs, act in traj_a]
@@ -350,9 +273,8 @@ def _numpy_to_json(data: Dataset) -> List:
         json_data.append([instr, json_traj_a, json_traj_b])
     return json_data
 
-
 def _json_to_numpy(data: List) -> Dataset:
-    """Convert JSON data back to numpy arrays."""
+    
     numpy_data = []
     for item in data:
         instr = item[0]
@@ -361,9 +283,8 @@ def _json_to_numpy(data: List) -> Dataset:
         numpy_data.append((instr, traj_a, traj_b))
     return numpy_data
 
-
 def _load_csv(path: Path) -> Dataset:
-    """Load dataset from CSV (trajectories stored as base64)."""
+    
     import base64
     
     data = []
@@ -376,9 +297,8 @@ def _load_csv(path: Path) -> Dataset:
             data.append((instr, traj_a, traj_b))
     return data
 
-
 def _save_csv(data: Dataset, path: Path):
-    """Save dataset to CSV with base64-encoded trajectories."""
+    
     import base64
     
     with open(path, "w", newline="") as f:

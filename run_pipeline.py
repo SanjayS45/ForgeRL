@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""
-Run the complete RLHF pipeline.
-
-This script orchestrates the full pipeline:
-1. Generate/load dataset
-2. Train reward model
-3. Train policy with learned reward
-
-Usage:
-    python run_pipeline.py --task reach-v3 --generate-data
-    python run_pipeline.py --dataset experiments/trajs.pkl
-"""
 
 import argparse
 import sys
@@ -22,27 +10,26 @@ import numpy as np
 import random
 import torch
 
-
 def main():
     parser = argparse.ArgumentParser(description="Run complete RLHF pipeline")
     
-    # Data options
+
     parser.add_argument("--task", type=str, default="reach-v3", help="MetaWorld task")
     parser.add_argument("--generate-data", action="store_true", help="Generate new dataset")
     parser.add_argument("--dataset", type=str, default="experiments/trajs.pkl", help="Dataset path")
     parser.add_argument("--num-pairs", type=int, default=1000, help="Number of preference pairs")
     
-    # Reward model options
+
     parser.add_argument("--rm-epochs", type=int, default=50, help="Reward model epochs")
     parser.add_argument("--rm-batch-size", type=int, default=32, help="Reward model batch size")
     parser.add_argument("--rm-lr", type=float, default=1e-4, help="Reward model learning rate")
     
-    # Policy options
+
     parser.add_argument("--policy-steps", type=int, default=100000, help="Policy training steps")
     parser.add_argument("--instruction", type=str, default="reach the target", help="Task instruction")
     parser.add_argument("--use-env-reward", action="store_true", help="Combine with env reward")
     
-    # General options
+
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--device", type=str, default="auto", help="Device (auto, cpu, cuda)")
     parser.add_argument("--skip-reward", action="store_true", help="Skip reward model training")
@@ -50,12 +37,12 @@ def main():
     
     args = parser.parse_args()
     
-    # Set seeds
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     
-    # Device
+
     if args.device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
@@ -64,7 +51,7 @@ def main():
     
     dataset_path = Path(args.dataset)
     
-    # Step 1: Generate or validate dataset
+
     print("\n" + "="*60)
     print("Step 1: Dataset Preparation")
     print("="*60)
@@ -102,7 +89,7 @@ def main():
         stats = compute_stats(data)
         print(f"\n{stats}")
         
-    # Step 2: Train reward model
+
     if not args.skip_reward:
         print("\n" + "="*60)
         print("Step 2: Reward Model Training")
@@ -150,13 +137,13 @@ def main():
             
         reward_model_path = f"{checkpoint_dir}/best_model.pt"
     else:
-        # Try to find existing reward model
+
         reward_model_path = f"checkpoints/reward_model/{args.task}/best_model.pt"
         if not Path(reward_model_path).exists():
             reward_model_path = None
             print("\nSkipping reward model (no trained model found)")
             
-    # Step 3: Train policy
+
     if not args.skip_policy:
         print("\n" + "="*60)
         print("Step 3: Policy Training")
@@ -171,7 +158,7 @@ def main():
         obs_dim = env.observation_space.shape[0]
         act_dim = env.action_space.shape[0]
         
-        # Load reward model if available
+
         reward_model = None
         if reward_model_path and Path(reward_model_path).exists():
             print(f"\nLoading reward model: {reward_model_path}")
@@ -213,7 +200,7 @@ def main():
             
         env.close()
         
-    # Summary
+
     print("\n" + "="*60)
     print("Pipeline Complete!")
     print("="*60)

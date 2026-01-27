@@ -1,0 +1,20 @@
+{
+  "total_steps": 100000,
+  "steps_per_update": 2048,
+  "epochs_per_update": 10,
+  "batch_size": 64,
+  "learning_rate": 0.0003,
+  "gamma": 0.99,
+  "gae_lambda": 0.95,
+  "clip_ratio": 0.2,
+  "entropy_coef": 0.01,
+  "value_coef": 0.5,
+  "max_grad_norm": 0.5,
+  "hidden_dim": 256,
+  "num_layers": 2,
+  "task": "reach-v3",
+  "instruction": "reach the target",
+  "reward_model_path": "/Users/sanjaysundaram/language_rlhf_robotics/checkpoints/reward_model/20260126_014740/best_model.pt",
+  "use_env_reward": false,
+  "custom_goals": null
+}

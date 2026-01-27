@@ -1,17 +1,3 @@
-"""
-FastAPI backend for RLHF pipeline control and monitoring.
-
-Provides REST API endpoints for:
-- Dataset upload and management
-- Reward model training
-- Policy training
-- Training progress monitoring
-- Model export
-
-Run with:
-    uvicorn backend.api:app --reload --port 8000
-"""
-
 import os
 import sys
 import json
@@ -24,7 +10,6 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 import threading
 
-# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
@@ -39,21 +24,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify actual frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global state for tracking training jobs
 training_jobs: Dict[str, Dict] = {}
 job_lock = threading.Lock()
 
-
-# Pydantic models for request/response
 class TrainingConfig(BaseModel):
     epochs: int = 50
     batch_size: int = 32
@@ -81,8 +62,7 @@ class PolicyTrainingConfig(BaseModel):
     instruction: Optional[str] = "reach the target"
     reward_model_path: Optional[str] = None
     use_env_reward: bool = True
-    custom_goals: Optional[List[List[float]]] = None  # User-defined goal positions for training
-
+    custom_goals: Optional[List[List[float]]] = None
 
 class DatasetInfo(BaseModel):
     name: str
@@ -96,8 +76,8 @@ class DatasetInfo(BaseModel):
 
 class TrainingStatus(BaseModel):
     job_id: str
-    status: str  # pending, running, completed, failed
-    progress: float  # 0-100
+    status: str
+    progress: float
     current_epoch: int
     total_epochs: int
     train_loss: Optional[float]
@@ -108,35 +88,26 @@ class TrainingStatus(BaseModel):
     completed_at: Optional[str]
     error: Optional[str]
 
-
-# Utility functions
 def get_project_root() -> Path:
     return Path(__file__).parent.parent
-
 
 def get_datasets_dir() -> Path:
     return get_project_root() / "experiments"
 
-
 def get_checkpoints_dir() -> Path:
     return get_project_root() / "checkpoints"
-
 
 def generate_job_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
-
-# API Endpoints
-
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    
     return {"status": "ok", "message": "RLHF Pipeline API"}
-
 
 @app.get("/api/info")
 async def get_info():
-    """Get system information."""
+    
     try:
         import torch
         pytorch_version = torch.__version__
@@ -154,12 +125,9 @@ async def get_info():
         "project_root": str(get_project_root()),
     }
 
-
-# Dataset endpoints
-
 @app.get("/api/datasets", response_model=List[DatasetInfo])
 async def list_datasets():
-    """List available datasets."""
+    
     datasets = []
     datasets_dir = get_datasets_dir()
     
@@ -188,10 +156,9 @@ async def list_datasets():
             
     return datasets
 
-
 @app.post("/api/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
-    """Upload a new dataset file."""
+    
     if not file.filename.endswith((".pkl", ".pickle", ".json")):
         raise HTTPException(400, "Unsupported file format. Use .pkl, .pickle, or .json")
         
@@ -200,7 +167,7 @@ async def upload_dataset(file: UploadFile = File(...)):
     
     save_path = datasets_dir / file.filename
     
-    # Read and validate
+
     content = await file.read()
     
     try:
@@ -209,7 +176,7 @@ async def upload_dataset(file: UploadFile = File(...)):
         else:
             data = pickle.loads(content)
             
-        # Basic validation
+
         if not isinstance(data, list) or len(data) == 0:
             raise ValueError("Dataset must be a non-empty list")
             
@@ -219,7 +186,7 @@ async def upload_dataset(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(400, f"Invalid dataset format: {str(e)}")
         
-    # Save
+
     with open(save_path, "wb") as f:
         pickle.dump(data, f)
         
@@ -229,10 +196,9 @@ async def upload_dataset(file: UploadFile = File(...)):
         "num_pairs": len(data),
     }
 
-
 @app.delete("/api/datasets/{name}")
 async def delete_dataset(name: str):
-    """Delete a dataset."""
+    
     path = get_datasets_dir() / f"{name}.pkl"
     
     if not path.exists():
@@ -241,10 +207,9 @@ async def delete_dataset(name: str):
     path.unlink()
     return {"message": f"Dataset {name} deleted"}
 
-
 @app.get("/api/datasets/{name}/samples")
 async def get_dataset_samples(name: str, n: int = 5):
-    """Get sample trajectory pairs from a dataset."""
+    
     path = get_datasets_dir() / f"{name}.pkl"
     
     if not path.exists():
@@ -254,14 +219,14 @@ async def get_dataset_samples(name: str, n: int = 5):
         with open(path, "rb") as f:
             data = pickle.load(f)
             
-        # Sample n random pairs
+
         import random
         samples = random.sample(data, min(n, len(data)))
         
-        # Format for frontend
+
         formatted_samples = []
         for instr, traj_a, traj_b in samples:
-            # Convert numpy arrays to lists for JSON serialization
+
             traj_a_list = [
                 [obs.tolist() if hasattr(obs, 'tolist') else list(obs),
                  act.tolist() if hasattr(act, 'tolist') else list(act)]
@@ -273,7 +238,7 @@ async def get_dataset_samples(name: str, n: int = 5):
                 for obs, act in traj_b
             ]
             
-            # Simple heuristic for predicted preference
+
             score_a = -np.linalg.norm(
                 np.array(traj_a[-1][0][:3]) - np.array(traj_a[-1][0][-3:])
             ) if traj_a else 0
@@ -293,16 +258,13 @@ async def get_dataset_samples(name: str, n: int = 5):
     except Exception as e:
         raise HTTPException(500, f"Error loading samples: {str(e)}")
 
-
-# Reward model training endpoints
-
 @app.post("/api/reward-model/train")
 async def start_reward_model_training(
     dataset_name: str,
     config: TrainingConfig,
     background_tasks: BackgroundTasks,
 ):
-    """Start reward model training."""
+    
     dataset_path = get_datasets_dir() / f"{dataset_name}.pkl"
     
     if not dataset_path.exists():
@@ -328,7 +290,7 @@ async def start_reward_model_training(
             "dataset": dataset_name,
         }
         
-    # Start training in background
+
     background_tasks.add_task(
         run_reward_model_training,
         job_id,
@@ -338,9 +300,8 @@ async def start_reward_model_training(
     
     return {"job_id": job_id, "message": "Training started"}
 
-
 async def run_reward_model_training(job_id: str, dataset_path: str, config: TrainingConfig):
-    """Background task for reward model training."""
+    
     import torch
     
     try:
@@ -348,22 +309,22 @@ async def run_reward_model_training(job_id: str, dataset_path: str, config: Trai
             training_jobs[job_id]["status"] = "running"
             training_jobs[job_id]["started_at"] = datetime.now().isoformat()
             
-        # Import training modules
+
         from utils.data_utils import load_dataset, split_dataset
         from utils.instruction_encoder import encode_instruction
         from reward_model.model import RewardModelWithSentenceEncoder
         from reward_model.trainer import RewardModelTrainer
         
-        # Load data
+
         data = load_dataset(dataset_path)
         train_data, val_data, _ = split_dataset(data, 0.8, 0.1, 0.1)
         
-        # Get dimensions
+
         sample = data[0]
         obs_dim = len(sample[1][0][0])
         act_dim = len(sample[1][0][1])
         
-        # Create model
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = RewardModelWithSentenceEncoder(
             obs_dim=obs_dim,
@@ -371,7 +332,7 @@ async def run_reward_model_training(job_id: str, dataset_path: str, config: Trai
             hidden_dim=config.hidden_dim,
         ).to(device)
         
-        # Create trainer with callback for progress updates
+
         trainer = RewardModelTrainer(
             model=model,
             device=device,
@@ -381,7 +342,7 @@ async def run_reward_model_training(job_id: str, dataset_path: str, config: Trai
         
         checkpoint_dir = get_checkpoints_dir() / "reward_model" / job_id
         
-        # Training with progress updates
+
         history = trainer.train(
             train_data=train_data,
             val_data=val_data,
@@ -392,7 +353,7 @@ async def run_reward_model_training(job_id: str, dataset_path: str, config: Trai
             checkpoint_dir=str(checkpoint_dir),
         )
         
-        # Update final status
+
         with job_lock:
             training_jobs[job_id].update({
                 "status": "completed",
@@ -414,18 +375,16 @@ async def run_reward_model_training(job_id: str, dataset_path: str, config: Trai
                 "completed_at": datetime.now().isoformat(),
             })
 
-
 @app.get("/api/training/{job_id}", response_model=TrainingStatus)
 async def get_training_status(job_id: str):
-    """Get training job status."""
+    
     with job_lock:
         if job_id not in training_jobs:
             raise HTTPException(404, "Job not found")
         
         job = training_jobs[job_id]
         
-    # Handle both reward model and policy training jobs
-    # Policy jobs use episode_reward/policy_loss, reward model uses train_loss/train_accuracy
+
     train_loss = job.get("train_loss") or job.get("policy_loss")
     train_accuracy = job.get("train_accuracy")
     episode_reward = job.get("episode_reward")
@@ -445,25 +404,21 @@ async def get_training_status(job_id: str):
         error=job.get("error"),
     )
 
-
 @app.get("/api/training")
 async def list_training_jobs():
-    """List all training jobs."""
+    
     with job_lock:
         return [
             {"job_id": job_id, **job}
             for job_id, job in training_jobs.items()
         ]
 
-
-# Policy training endpoints
-
 @app.post("/api/policy/train")
 async def start_policy_training(
     config: PolicyTrainingConfig,
     background_tasks: BackgroundTasks,
 ):
-    """Start policy training."""
+    
     job_id = generate_job_id()
     
     with job_lock:
@@ -485,9 +440,8 @@ async def start_policy_training(
     
     return {"job_id": job_id, "message": "Policy training started"}
 
-
 async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
-    """Background task for policy training."""
+    
     import torch
     import traceback
     
@@ -510,14 +464,14 @@ async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
         if config.custom_goals:
             print(f"[Policy Training] Custom goals provided: {len(config.custom_goals)} targets")
         
-        # Create environment with the specified task
+
         env = make_metaworld_env(task_name=config.task)
         obs_dim = env.observation_space.shape[0]
         act_dim = env.action_space.shape[0]
         
         print(f"[Policy Training] Environment created - obs_dim: {obs_dim}, act_dim: {act_dim}")
         
-        # Load reward model if specified
+
         reward_model = None
         if config.reward_model_path and Path(config.reward_model_path).exists():
             print(f"[Policy Training] Loading reward model from {config.reward_model_path}")
@@ -532,7 +486,7 @@ async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
         else:
             print("[Policy Training] Using environment reward (no reward model)")
             
-        # Create agent with all parameters
+
         agent = PPOAgent(
             obs_dim=obs_dim,
             act_dim=act_dim,
@@ -549,7 +503,7 @@ async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
         log_dir = get_project_root() / "logs" / "policy" / job_id
         log_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save training config
+
         config_path = log_dir / "config.json"
         with open(config_path, "w") as f:
             json.dump(config.dict(), f, indent=2)
@@ -562,10 +516,10 @@ async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
             instruction_encoder=encode_instruction,
             use_env_reward=config.use_env_reward,
             log_dir=str(log_dir),
-            custom_goals=config.custom_goals,  # Pass custom goals for potential goal-conditioned training
+            custom_goals=config.custom_goals,
         )
         
-        # Training with progress callback
+
         def progress_callback(step, total, episode_reward, policy_loss):
             progress = (step / total) * 100
             with job_lock:
@@ -608,16 +562,13 @@ async def run_policy_training(job_id: str, config: PolicyTrainingConfig):
                 "completed_at": datetime.now().isoformat(),
             })
 
-
-# Model export endpoints
-
 @app.get("/api/models")
 async def list_models():
-    """List available trained models."""
+    
     models = []
     checkpoints_dir = get_checkpoints_dir()
     
-    # Reward models
+
     reward_dir = checkpoints_dir / "reward_model"
     if reward_dir.exists():
         for path in reward_dir.glob("*/best_model.pt"):
@@ -628,7 +579,7 @@ async def list_models():
                 "created_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
             })
             
-    # Policy models
+
     logs_dir = get_project_root() / "logs" / "policy"
     if logs_dir.exists():
         for path in logs_dir.glob("*/final_model.pt"):
@@ -641,10 +592,9 @@ async def list_models():
             
     return models
 
-
 @app.get("/api/models/{model_type}/{name}/download")
 async def download_model(model_type: str, name: str):
-    """Download a trained model."""
+    
     if model_type == "reward_model":
         path = get_checkpoints_dir() / "reward_model" / name / "best_model.pt"
     elif model_type == "policy":
@@ -657,16 +607,13 @@ async def download_model(model_type: str, name: str):
         
     return FileResponse(path, filename=f"{model_type}_{name}.pt")
 
-
-# History and visualization endpoints
-
 @app.get("/api/training/{job_id}/history")
 async def get_training_history(job_id: str):
-    """Get training history for visualization."""
-    # Check reward model history
+    
+
     history_path = get_checkpoints_dir() / "reward_model" / job_id / "history.json"
     if not history_path.exists():
-        # Check policy history
+
         history_path = get_project_root() / "logs" / "policy" / job_id / "history.json"
         
     if not history_path.exists():
@@ -676,7 +623,6 @@ async def get_training_history(job_id: str):
         history = json.load(f)
         
     return history
-
 
 if __name__ == "__main__":
     import uvicorn

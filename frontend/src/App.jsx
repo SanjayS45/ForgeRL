@@ -15,8 +15,6 @@ import axios from 'axios';
 
 const API_BASE = '/api';
 
-// ==================== PARAMETER INPUT COMPONENT (OUTSIDE App to prevent re-render) ====================
-
 const ParamInput = React.memo(({ label, value, onChange, type = 'number', step, options, min, max, placeholder }) => (
   <div className="space-y-1">
     <label className="text-xs text-emerald-600 uppercase tracking-wider">{label}</label>
@@ -43,7 +41,6 @@ const ParamInput = React.memo(({ label, value, onChange, type = 'number', step, 
   </div>
 ));
 
-// Available MetaWorld tasks
 const METAWORLD_TASKS = [
   'reach-v3',
   'push-v3', 
@@ -61,7 +58,6 @@ const METAWORLD_TASKS = [
   'coffee-button-v3',
 ];
 
-// Task descriptions for display
 const TASK_DESCRIPTIONS = {
   'reach-v3': 'Move end effector to reach the target position',
   'push-v3': 'Push the puck to the goal position',
@@ -79,31 +75,28 @@ const TASK_DESCRIPTIONS = {
   'coffee-button-v3': 'Press the coffee machine button',
 };
 
-// ==================== SAWYER ARM VISUALIZATION ====================
-
-// Inverse Kinematics solver for 2-link arm
 function solveIK(targetX, targetY, targetZ, L1, L2) {
-  // Project to horizontal plane for base rotation
+
   const baseAngle = Math.atan2(targetZ, targetX);
   
-  // Distance in horizontal plane from base
+
   const horizontalDist = Math.sqrt(targetX * targetX + targetZ * targetZ);
   
-  // 2D IK in the vertical plane (horizontal dist, height)
+
   const dx = horizontalDist;
-  const dy = targetY - 0.25; // Subtract base height
+  const dy = targetY - 0.25;
   const dist = Math.sqrt(dx * dx + dy * dy);
   
-  // Clamp to reachable workspace
+
   const maxReach = L1 + L2 - 0.01;
   const minReach = Math.abs(L1 - L2) + 0.01;
   const clampedDist = Math.max(minReach, Math.min(maxReach, dist));
   
-  // Law of cosines for elbow angle
+
   const cosElbow = (L1 * L1 + L2 * L2 - clampedDist * clampedDist) / (2 * L1 * L2);
   const elbowAngle = Math.PI - Math.acos(Math.max(-1, Math.min(1, cosElbow)));
   
-  // Shoulder angle
+
   const cosAlpha = (L1 * L1 + clampedDist * clampedDist - L2 * L2) / (2 * L1 * clampedDist);
   const alpha = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
   const beta = Math.atan2(dy, dx);
@@ -116,16 +109,16 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
   const armRef = useRef();
   const pulseRef = useRef(0);
   
-  // Arm segment lengths
-  const L1 = 0.35; // Upper arm
-  const L2 = 0.30; // Forearm
-  const L3 = 0.15; // Wrist to gripper
+
+  const L1 = 0.35;
+  const L2 = 0.30;
+  const L3 = 0.15;
   
-  // Extract current position from trajectory
+
   const positions = useMemo(() => {
     return trajectory.map(step => {
       const obs = step[0];
-      // Scale positions for better visualization
+
       return new THREE.Vector3(
         obs[0] * 2.5,
         obs[2] * 2.5 + 0.4,
@@ -136,11 +129,11 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
   
   const currentPos = positions[currentStep] || new THREE.Vector3(0.3, 0.5, 0);
   
-  // Goal position from trajectory data
+
   const goalPos = useMemo(() => {
     if (trajectory[currentStep]) {
       const obs = trajectory[currentStep][0];
-      // Goal is typically in the last 3 elements of observation
+
       return new THREE.Vector3(
         obs.slice(-3)[0] * 2.5,
         obs.slice(-3)[2] * 2.5 + 0.4,
@@ -150,21 +143,18 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
     return new THREE.Vector3(0.4, 0.4, 0.2);
   }, [trajectory, currentStep]);
   
-  // Calculate distance to goal for success visualization
+
   const distanceToGoal = currentPos.distanceTo(goalPos);
   const isNearGoal = distanceToGoal < 0.1;
 
-  // Solve IK for current end effector position
   const { baseAngle, shoulderAngle, elbowAngle } = useMemo(() => {
     return solveIK(currentPos.x, currentPos.y, currentPos.z, L1, L2);
   }, [currentPos, L1, L2]);
 
-  // Animate pulse effect
   useFrame((state) => {
     pulseRef.current = Math.sin(state.clock.elapsedTime * 3) * 0.5 + 0.5;
   });
 
-  // Calculate actual end effector position from forward kinematics (for verification line)
   const fkEndPos = useMemo(() => {
     const s1 = Math.sin(shoulderAngle);
     const c1 = Math.cos(shoulderAngle);
@@ -181,48 +171,48 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
 
   return (
     <group ref={armRef}>
-      {/* Ground/Table */}
+      {}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[4, 4]} />
         <meshStandardMaterial color="#0a140a" metalness={0.3} roughness={0.8} />
       </mesh>
       
-      {/* Grid on ground */}
+      {}
       <gridHelper args={[4, 20, '#004422', '#001a0a']} position={[0, 0.001, 0]} />
       
-      {/* Workspace boundary circle */}
+      {}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
         <ringGeometry args={[L1 + L2 - 0.05, L1 + L2, 64]} />
         <meshBasicMaterial color="#003300" transparent opacity={0.3} side={THREE.DoubleSide} />
       </mesh>
       
-      {/* Robot Base */}
+      {}
       <group position={[0, 0, 0]}>
-        {/* Base plate */}
+        {}
         <Cylinder args={[0.2, 0.22, 0.06, 32]} position={[0, 0.03, 0]} castShadow>
           <meshStandardMaterial color="#1a1a1a" metalness={0.9} roughness={0.2} />
         </Cylinder>
         
-        {/* Base column */}
+        {}
         <Cylinder args={[0.12, 0.14, 0.12, 32]} position={[0, 0.1, 0]} castShadow>
           <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.3} />
         </Cylinder>
         
-        {/* Base accent ring */}
+        {}
         <mesh position={[0, 0.1, 0]}>
           <torusGeometry args={[0.14, 0.008, 8, 32]} />
           <meshStandardMaterial color="#00ff6a" emissive="#00ff6a" emissiveIntensity={0.5} />
         </mesh>
         
-        {/* Shoulder mount */}
+        {}
         <Cylinder args={[0.08, 0.1, 0.1, 32]} position={[0, 0.2, 0]} castShadow>
           <meshStandardMaterial color="#2a2a2a" metalness={0.7} roughness={0.3} />
         </Cylinder>
       </group>
       
-      {/* Arm Assembly - Properly connected with IK */}
+      {}
       <group position={[0, 0.25, 0]} rotation={[0, baseAngle, 0]}>
-        {/* Shoulder Joint */}
+        {}
         <Sphere args={[0.06, 16, 16]} castShadow>
           <meshStandardMaterial color="#2a2a2a" metalness={0.8} roughness={0.2} />
         </Sphere>
@@ -231,13 +221,13 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
           <meshStandardMaterial color="#00cc55" emissive="#00cc55" emissiveIntensity={0.4} />
         </mesh>
         
-        {/* Upper Arm (Link 1) */}
+        {}
         <group rotation={[0, 0, Math.PI/2 - shoulderAngle]}>
           <Cylinder args={[0.045, 0.04, L1, 16]} position={[L1/2, 0, 0]} rotation={[0, 0, Math.PI/2]} castShadow>
             <meshStandardMaterial color="#333333" metalness={0.6} roughness={0.4} />
           </Cylinder>
           
-          {/* Elbow Joint */}
+          {}
           <group position={[L1, 0, 0]}>
             <Sphere args={[0.05, 16, 16]} castShadow>
               <meshStandardMaterial color="#2a2a2a" metalness={0.8} roughness={0.2} />
@@ -247,36 +237,36 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
               <meshStandardMaterial color="#00cc55" emissive="#00cc55" emissiveIntensity={0.3} />
             </mesh>
             
-            {/* Forearm (Link 2) */}
+            {}
             <group rotation={[0, 0, elbowAngle]}>
               <Cylinder args={[0.035, 0.03, L2, 16]} position={[L2/2, 0, 0]} rotation={[0, 0, Math.PI/2]} castShadow>
                 <meshStandardMaterial color="#333333" metalness={0.6} roughness={0.4} />
               </Cylinder>
               
-              {/* Wrist Joint */}
+              {}
               <group position={[L2, 0, 0]}>
                 <Sphere args={[0.04, 16, 16]} castShadow>
                   <meshStandardMaterial color="#2a2a2a" metalness={0.8} roughness={0.2} />
                 </Sphere>
                 
-                {/* Wrist segment */}
+                {}
                 <Cylinder args={[0.025, 0.02, L3, 16]} position={[L3/2, 0, 0]} rotation={[0, 0, Math.PI/2]} castShadow>
                   <meshStandardMaterial color="#333333" metalness={0.6} roughness={0.4} />
                 </Cylinder>
                 
-                {/* Gripper Assembly */}
+                {}
                 <group position={[L3, 0, 0]} rotation={[0, 0, -Math.PI/2 + shoulderAngle - elbowAngle]}>
-                  {/* Gripper mount */}
+                  {}
                   <Cylinder args={[0.025, 0.03, 0.04, 16]} castShadow>
                     <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
                   </Cylinder>
                   
-                  {/* Gripper base */}
+                  {}
                   <Box args={[0.06, 0.02, 0.03]} position={[0, -0.03, 0]} castShadow>
                     <meshStandardMaterial color="#1a1a1a" metalness={0.7} roughness={0.3} />
                   </Box>
                   
-                  {/* Gripper fingers */}
+                  {}
                   <Box args={[0.012, 0.045, 0.015]} position={[0.02, -0.055, 0]} castShadow>
                     <meshStandardMaterial color="#333333" metalness={0.6} roughness={0.4} />
                   </Box>
@@ -284,7 +274,7 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
                     <meshStandardMaterial color="#333333" metalness={0.6} roughness={0.4} />
                   </Box>
                   
-                  {/* Finger tips */}
+                  {}
                   <Box args={[0.015, 0.012, 0.018]} position={[0.02, -0.08, 0]}>
                     <meshStandardMaterial 
                       color={isNearGoal ? "#00ff6a" : "#00aa44"} 
@@ -300,7 +290,7 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
                     />
                   </Box>
                   
-                  {/* Status light */}
+                  {}
                   <Sphere args={[0.008, 8, 8]} position={[0, 0.015, 0.02]}>
                     <meshStandardMaterial 
                       color={isNearGoal ? "#00ff6a" : "#ffaa00"} 
@@ -315,9 +305,9 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
         </group>
       </group>
       
-      {/* Goal Target from Trajectory */}
+      {}
       <group position={[goalPos.x, goalPos.y, goalPos.z]}>
-        {/* Target core */}
+        {}
         <Sphere args={[0.035, 16, 16]}>
           <meshStandardMaterial 
             color={isNearGoal ? "#00ff6a" : "#ff3333"} 
@@ -328,7 +318,7 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
           />
         </Sphere>
         
-        {/* Target rings */}
+        {}
         <mesh rotation={[Math.PI/2, 0, 0]}>
           <ringGeometry args={[0.05, 0.06, 32]} />
           <meshBasicMaterial color={isNearGoal ? "#00ff6a" : "#ff3333"} transparent opacity={0.6} side={THREE.DoubleSide} />
@@ -338,13 +328,13 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
           <meshBasicMaterial color={isNearGoal ? "#00ff6a" : "#ff3333"} transparent opacity={0.4} side={THREE.DoubleSide} />
         </mesh>
         
-        {/* Outer pulse ring */}
+        {}
         <mesh rotation={[Math.PI/2, 0, 0]}>
           <ringGeometry args={[0.08, 0.09, 32]} />
           <meshBasicMaterial color={isNearGoal ? "#00ff6a" : "#ff6666"} transparent opacity={0.2 + pulseRef.current * 0.2} side={THREE.DoubleSide} />
         </mesh>
         
-        {/* Distance indicator line to gripper */}
+        {}
         <line>
           <bufferGeometry>
             <bufferAttribute
@@ -358,7 +348,7 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
         </line>
       </group>
       
-      {/* Custom User Targets */}
+      {}
       {customTargets.map((target, i) => (
         <group key={i} position={[target.x, target.y, target.z]}>
           <Sphere args={[0.03, 12, 12]}>
@@ -377,7 +367,7 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
         </group>
       ))}
       
-      {/* Trajectory Path */}
+      {}
       {showPath && positions.length > 1 && (
         <line>
           <bufferGeometry>
@@ -392,14 +382,14 @@ function SawyerArm({ trajectory, currentStep, showPath, customTargets = [] }) {
         </line>
       )}
       
-      {/* Visited path points */}
+      {}
       {showPath && positions.slice(0, currentStep + 1).map((pos, i) => (
         <Sphere key={i} args={[0.006, 6, 6]} position={[pos.x, pos.y, pos.z]}>
           <meshBasicMaterial color="#00ff6a" transparent opacity={0.4 + (i / positions.length) * 0.4} />
         </Sphere>
       ))}
       
-      {/* Success indicator when near goal */}
+      {}
       {isNearGoal && (
         <group position={[goalPos.x, goalPos.y + 0.15, goalPos.z]}>
           <Sphere args={[0.02, 8, 8]}>
@@ -418,16 +408,16 @@ function Scene3D({ trajectory, currentStep, showPath, customTargets = [], onAddT
       camera={{ position: [1.2, 1.0, 1.2], fov: 50 }}
       gl={{ antialias: true }}
       onPointerMissed={(e) => {
-        // Optional: Add target on double-click in empty space
+
         if (e.detail === 2 && onAddTarget) {
-          // Could implement raycasting to get 3D position
+
         }
       }}
     >
       <color attach="background" args={['#050505']} />
       <fog attach="fog" args={['#050505', 4, 10]} />
       
-      {/* Lighting */}
+      {}
       <ambientLight intensity={0.4} />
       <directionalLight 
         position={[5, 8, 5]} 
@@ -453,25 +443,23 @@ function Scene3D({ trajectory, currentStep, showPath, customTargets = [], onAddT
   );
 }
 
-// ==================== MAIN APP ====================
-
 export default function App() {
-  // Navigation
+
   const [activeTab, setActiveTab] = useState('train');
   
-  // Data states
+
   const [datasets, setDatasets] = useState([]);
   const [selectedDataset, setSelectedDataset] = useState(null);
   const [datasetDetails, setDatasetDetails] = useState(null);
   const [models, setModels] = useState([]);
   
-  // Training states
+
   const [isTrainingRM, setIsTrainingRM] = useState(false);
   const [isTrainingPolicy, setIsTrainingPolicy] = useState(false);
   const [rmHistory, setRmHistory] = useState({ loss: [], accuracy: [] });
   const [policyHistory, setPolicyHistory] = useState({ reward: [], loss: [] });
   
-  // Model Parameters (editable)
+
   const [rmParams, setRmParams] = useState({
     epochs: 50,
     batch_size: 32,
@@ -503,7 +491,7 @@ export default function App() {
     instruction: 'reach the target'
   });
   
-  // Visualization states
+
   const [sampleTrajectories, setSampleTrajectories] = useState([]);
   const [currentTrajIndex, setCurrentTrajIndex] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
@@ -516,22 +504,18 @@ export default function App() {
   
   const playIntervalRef = useRef(null);
 
-  // Add custom target
   const addCustomTarget = () => {
     setCustomTargets(prev => [...prev, { ...newTarget, id: Date.now() }]);
   };
 
-  // Remove custom target
   const removeCustomTarget = (id) => {
     setCustomTargets(prev => prev.filter(t => t.id !== id));
   };
 
-  // Clear all custom targets
   const clearCustomTargets = () => {
     setCustomTargets([]);
   };
 
-  // Fetch data
   const fetchData = useCallback(async () => {
     try {
       const [datasetsRes, modelsRes] = await Promise.all([
@@ -551,14 +535,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Load sample trajectories when dataset selected
   useEffect(() => {
     if (selectedDataset) {
       loadSampleTrajectories();
     }
   }, [selectedDataset]);
 
-  // Animation playback
   useEffect(() => {
     if (isPlaying && sampleTrajectories.length > 0) {
       const traj = sampleTrajectories[currentTrajIndex]?.traj_a || [];
@@ -577,7 +559,7 @@ export default function App() {
       setSampleTrajectories(res.data.samples || []);
       generateRewardDistribution(res.data.samples || []);
     } catch (error) {
-      // Generate realistic mock data
+
       const mockSamples = Array(5).fill(null).map((_, i) => ({
         instruction: ['reach the red target', 'move to goal position', 'touch the marker', 'reach toward target', 'extend to goal'][i],
         traj_a: Array(50).fill(null).map((_, t) => [
@@ -661,7 +643,7 @@ export default function App() {
     
     const rewardModel = models.find(m => m.type === 'reward_model');
     
-    // Build config from current parameters - ensure task and instruction are included
+
     const config = {
       task: policyParams.task,
       instruction: policyParams.instruction,
@@ -680,7 +662,7 @@ export default function App() {
       num_layers: policyParams.num_layers,
       reward_model_path: rewardModel?.path || null,
       use_env_reward: !rewardModel,
-      // Include custom targets for potential goal conditioning
+
       custom_goals: customTargets.length > 0 ? customTargets.map(t => [t.x, t.y, t.z]) : null,
     };
     
@@ -725,7 +707,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-matrix-black grid-bg text-emerald-100">
-      {/* Header */}
+      {}
       <header className="border-b border-neon-green/20 bg-matrix-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-[1920px] mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -766,12 +748,12 @@ export default function App() {
       </header>
 
       <main className="max-w-[1920px] mx-auto p-4">
-        {/* ==================== TRAIN TAB ==================== */}
+        {}
         {activeTab === 'train' && (
           <div className="grid grid-cols-12 gap-4 animate-fadeIn">
-            {/* Left - Dataset & Quick Config */}
+            {}
             <div className="col-span-3 space-y-4">
-              {/* Dataset */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-neon-green">
                   <Database size={16} /> DATASET
@@ -811,7 +793,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Quick Actions */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4 space-y-3">
                 <h2 className="text-sm font-semibold mb-2 flex items-center gap-2 text-neon-green">
                   <Zap size={16} /> QUICK TRAIN
@@ -842,7 +824,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Models */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-neon-green">
                   <Download size={16} /> MODELS
@@ -868,9 +850,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Center - Training Visualization */}
+            {}
             <div className="col-span-6 space-y-4">
-              {/* Reward Model Charts */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-neon-green">
                   <Activity size={16} /> REWARD MODEL TRAINING
@@ -915,7 +897,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Policy Charts */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h2 className="text-sm font-semibold mb-3 flex items-center gap-2 text-neon-green">
                   <BarChart3 size={16} /> POLICY TRAINING (PPO)
@@ -960,7 +942,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Reward Distribution */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h2 className="text-sm font-semibold mb-3 text-neon-green">REWARD DISTRIBUTION</h2>
                 <div className="h-32">
@@ -977,10 +959,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right - 3D Preview */}
+            {}
             <div className="col-span-3">
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 overflow-hidden h-full flex flex-col">
-                {/* Task Badge */}
+                {}
                 <div className="px-3 py-2 bg-gradient-to-r from-neon-green/10 to-transparent border-b border-neon-green/20">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-emerald-600 uppercase">Task:</span>
@@ -1025,10 +1007,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== PARAMETERS TAB ==================== */}
+        {}
         {activeTab === 'params' && (
           <div className="grid grid-cols-2 gap-6 animate-fadeIn max-w-5xl mx-auto">
-            {/* Reward Model Parameters */}
+            {}
             <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2 text-neon-green">
@@ -1050,7 +1032,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Policy Parameters */}
+            {}
             <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2 text-neon-green">
@@ -1058,7 +1040,7 @@ export default function App() {
                 </h2>
               </div>
               
-              {/* Task Selection with Description */}
+              {}
               <div className="mb-4 p-3 bg-black/40 rounded-lg border border-neon-green/10">
                 <div className="grid grid-cols-2 gap-4 mb-3">
                   <ParamInput label="Task" value={policyParams.task} onChange={v => setPolicyParams(p => ({...p, task: v}))} options={METAWORLD_TASKS} />
@@ -1069,7 +1051,7 @@ export default function App() {
                 </p>
               </div>
               
-              {/* Instruction Input - Full Width */}
+              {}
               <div className="mb-4">
                 <label className="text-xs text-emerald-600 uppercase tracking-wider block mb-1">Instruction (Natural Language)</label>
                 <input
@@ -1107,13 +1089,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== VISUALIZE TAB ==================== */}
+        {}
         {activeTab === 'visualize' && (
           <div className="grid grid-cols-12 gap-4 animate-fadeIn">
-            {/* Main 3D View */}
+            {}
             <div className="col-span-9">
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 overflow-hidden">
-                {/* Task Info Header */}
+                {}
                 <div className="p-3 bg-gradient-to-r from-neon-green/10 to-transparent border-b border-neon-green/20">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1150,7 +1132,7 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* Target Panel (collapsible) */}
+                {}
                 {showTargetPanel && (
                   <div className="p-4 border-b border-neon-green/10 bg-black/40">
                     <div className="flex items-center justify-between mb-3">
@@ -1250,9 +1232,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right sidebar */}
+            {}
             <div className="col-span-3 space-y-4">
-              {/* Trajectory Selector */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h3 className="text-sm font-semibold mb-3 text-neon-green">TRAJECTORY PAIRS</h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -1275,7 +1257,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Position Data */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h3 className="text-sm font-semibold mb-3 text-neon-green">LIVE DATA</h3>
                 {currentTrajectory[currentStep] && (
@@ -1308,7 +1290,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* 2D Plot */}
+              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h3 className="text-sm font-semibold mb-3 text-neon-green">X-Y PATH</h3>
                 <div className="h-40">
@@ -1328,7 +1310,7 @@ export default function App() {
                           fill="#ff4444"
                         />
                       )}
-                      {/* Custom targets on 2D plot */}
+                      {}
                       <Scatter
                         data={customTargets.map(t => ({ x: t.x / 2.5, y: t.z / 2.5 }))}
                         fill="#ffaa00"

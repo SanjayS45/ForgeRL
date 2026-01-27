@@ -1,10 +1,3 @@
-"""
-Proximal Policy Optimization (PPO) implementation.
-
-Clean, modular PPO for continuous action spaces with support for
-learned reward models.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,17 +11,14 @@ from tqdm import tqdm
 
 from policy.networks import ActorCritic
 
-
 class RolloutBuffer:
-    """
-    Buffer for storing rollout data.
-    """
+    
     
     def __init__(self, buffer_size: int, obs_dim: int, act_dim: int, device: str = "cpu"):
         self.buffer_size = buffer_size
         self.device = device
         
-        # Storage
+
         self.observations = np.zeros((buffer_size, obs_dim), dtype=np.float32)
         self.actions = np.zeros((buffer_size, act_dim), dtype=np.float32)
         self.rewards = np.zeros(buffer_size, dtype=np.float32)
@@ -36,7 +26,7 @@ class RolloutBuffer:
         self.values = np.zeros(buffer_size, dtype=np.float32)
         self.log_probs = np.zeros(buffer_size, dtype=np.float32)
         
-        # Computed during finalization
+
         self.advantages = np.zeros(buffer_size, dtype=np.float32)
         self.returns = np.zeros(buffer_size, dtype=np.float32)
         
@@ -52,7 +42,7 @@ class RolloutBuffer:
         value: float,
         log_prob: float,
     ):
-        """Add a transition to the buffer."""
+        
         assert self.ptr < self.buffer_size
         
         self.observations[self.ptr] = obs
@@ -65,15 +55,13 @@ class RolloutBuffer:
         self.ptr += 1
         
     def finish_path(self, last_value: float, gamma: float, gae_lambda: float):
-        """
-        Compute advantages using GAE when a trajectory ends.
-        """
+        
         path_slice = slice(self.path_start, self.ptr)
         rewards = self.rewards[path_slice]
         values = np.append(self.values[path_slice], last_value)
         dones = self.dones[path_slice]
         
-        # GAE computation
+
         deltas = rewards + gamma * values[1:] * (1 - dones) - values[:-1]
         advantages = np.zeros_like(rewards)
         gae = 0
@@ -88,8 +76,8 @@ class RolloutBuffer:
         self.path_start = self.ptr
         
     def get(self) -> Dict[str, torch.Tensor]:
-        """Get all data as tensors."""
-        # Normalize advantages
+        
+
         adv_mean = self.advantages[:self.ptr].mean()
         adv_std = self.advantages[:self.ptr].std() + 1e-8
         advantages = (self.advantages[:self.ptr] - adv_mean) / adv_std
@@ -104,15 +92,12 @@ class RolloutBuffer:
         }
         
     def reset(self):
-        """Reset buffer."""
+        
         self.ptr = 0
         self.path_start = 0
 
-
 class PPOAgent:
-    """
-    PPO Agent for continuous control.
-    """
+    
     
     def __init__(
         self,
@@ -138,7 +123,7 @@ class PPOAgent:
         self.value_coef = value_coef
         self.max_grad_norm = max_grad_norm
         
-        # Networks
+
         self.actor_critic = ActorCritic(
             obs_dim=obs_dim,
             act_dim=act_dim,
@@ -146,7 +131,7 @@ class PPOAgent:
             num_layers=num_layers,
         ).to(device)
         
-        # Optimizer
+
         self.optimizer = Adam(self.actor_critic.parameters(), lr=lr, eps=1e-5)
         
     def get_action(
@@ -154,14 +139,7 @@ class PPOAgent:
         obs: np.ndarray,
         deterministic: bool = False,
     ) -> Tuple[np.ndarray, float, float]:
-        """
-        Get action from policy.
         
-        Returns:
-            action: Action array
-            value: State value
-            log_prob: Log probability
-        """
         with torch.no_grad():
             obs_t = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
             action, log_prob, _, value = self.actor_critic.get_action_and_value(
@@ -175,12 +153,7 @@ class PPOAgent:
         )
         
     def update(self, buffer: RolloutBuffer, epochs: int = 10, batch_size: int = 64) -> Dict:
-        """
-        Update policy using PPO.
         
-        Returns:
-            Dictionary of training metrics
-        """
         data = buffer.get()
         
         n_samples = len(data["observations"])
@@ -207,29 +180,29 @@ class PPOAgent:
                 advantages = data["advantages"][batch_idx]
                 returns = data["returns"][batch_idx]
                 
-                # Forward pass
+
                 _, new_log_probs, entropy, values = self.actor_critic.get_action_and_value(
                     obs, action=actions
                 )
                 
-                # Policy loss
+
                 ratio = (new_log_probs - old_log_probs).exp()
                 clip_ratio_tensor = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio)
                 policy_loss = -torch.min(ratio * advantages, clip_ratio_tensor * advantages).mean()
                 
-                # Value loss
+
                 value_loss = F.mse_loss(values, returns)
                 
-                # Total loss
+
                 loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy.mean()
                 
-                # Optimization step
+
                 self.optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
                 self.optimizer.step()
                 
-                # Metrics
+
                 with torch.no_grad():
                     kl = (old_log_probs - new_log_probs).mean().item()
                     clip_frac = ((ratio - 1).abs() > self.clip_ratio).float().mean().item()
@@ -240,7 +213,7 @@ class PPOAgent:
                 metrics["kl"].append(kl)
                 metrics["clip_fraction"].append(clip_frac)
                 
-            # Early stopping on KL divergence
+
             if self.target_kl is not None:
                 avg_kl = np.mean(metrics["kl"][-n_samples // batch_size:])
                 if avg_kl > self.target_kl:
@@ -249,23 +222,20 @@ class PPOAgent:
         return {k: np.mean(v) for k, v in metrics.items()}
         
     def save(self, path: str):
-        """Save agent."""
+        
         torch.save({
             "actor_critic": self.actor_critic.state_dict(),
             "optimizer": self.optimizer.state_dict(),
         }, path)
         
     def load(self, path: str):
-        """Load agent."""
+        
         checkpoint = torch.load(path, map_location=self.device)
         self.actor_critic.load_state_dict(checkpoint["actor_critic"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
 
-
 class PPOTrainer:
-    """
-    Trainer for PPO with reward model integration.
-    """
+    
     
     def __init__(
         self,
@@ -286,9 +256,9 @@ class PPOTrainer:
         self.instruction_encoder = instruction_encoder
         self.use_env_reward = use_env_reward
         self.reward_scale = reward_scale
-        self.custom_goals = custom_goals  # User-defined goal positions
+        self.custom_goals = custom_goals
         
-        # Encode instruction if using reward model
+
         self._instr_tensor = None
         if reward_model is not None and instruction is not None:
             if instruction_encoder is not None:
@@ -300,11 +270,11 @@ class PPOTrainer:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
-        # Tracking
+
         self.episode_rewards = deque(maxlen=100)
         self.episode_lengths = deque(maxlen=100)
         
-        # Log configuration
+
         print(f"[PPOTrainer] Initialized with instruction: {instruction}")
         print(f"[PPOTrainer] Using env reward: {use_env_reward}")
         print(f"[PPOTrainer] Reward model: {'Loaded' if reward_model else 'None'}")
@@ -317,7 +287,7 @@ class PPOTrainer:
         action: np.ndarray,
         env_reward: float,
     ) -> float:
-        """Compute reward from model or environment."""
+        
         if self.reward_model is None:
             return env_reward
             
@@ -350,23 +320,7 @@ class PPOTrainer:
         log_freq: int = 1,
         progress_callback: Optional[callable] = None,
     ) -> Dict:
-        """
-        Train the agent.
         
-        Args:
-            total_timesteps: Total environment steps
-            steps_per_update: Steps between policy updates
-            epochs_per_update: PPO epochs per update
-            batch_size: Mini-batch size
-            gamma: Discount factor
-            gae_lambda: GAE lambda
-            checkpoint_freq: Checkpoint frequency (updates)
-            log_freq: Logging frequency (updates)
-            progress_callback: Optional callback(step, total, episode_reward, policy_loss)
-            
-        Returns:
-            Training history
-        """
         obs_dim = self.env.observation_space.shape[0]
         act_dim = self.env.action_space.shape[0]
         
@@ -382,7 +336,7 @@ class PPOTrainer:
             "entropy": [],
         }
         
-        # Initialize
+
         obs, _ = self.env.reset()
         episode_reward = 0
         episode_length = 0
@@ -395,19 +349,19 @@ class PPOTrainer:
         for update in pbar:
             buffer.reset()
             
-            # Collect rollout
+
             for step in range(steps_per_update):
-                # Get action
+
                 action, value, log_prob = self.agent.get_action(obs)
                 
-                # Step environment
+
                 next_obs, env_reward, terminated, truncated, info = self.env.step(action)
                 done = terminated or truncated
                 
-                # Compute reward
+
                 reward = self._compute_reward(obs, action, env_reward)
                 
-                # Store transition
+
                 buffer.add(obs, action, reward, done, value, log_prob)
                 
                 obs = next_obs
@@ -416,7 +370,7 @@ class PPOTrainer:
                 global_step += 1
                 
                 if done:
-                    # Finish path with zero value (terminal)
+
                     buffer.finish_path(0.0, gamma, gae_lambda)
                     
                     self.episode_rewards.append(episode_reward)
@@ -426,15 +380,15 @@ class PPOTrainer:
                     episode_reward = 0
                     episode_length = 0
                     
-            # Bootstrap value for non-terminal state
+
             if not done:
                 _, last_value, _ = self.agent.get_action(obs)
                 buffer.finish_path(last_value, gamma, gae_lambda)
                 
-            # Update policy
+
             update_metrics = self.agent.update(buffer, epochs_per_update, batch_size)
             
-            # Logging
+
             mean_reward = 0.0
             policy_loss = update_metrics["policy_loss"]
             
@@ -454,22 +408,22 @@ class PPOTrainer:
                     "loss": f"{policy_loss:.4f}",
                 })
             
-            # Progress callback for UI updates
+
             if progress_callback is not None:
                 try:
                     progress_callback(global_step, total_timesteps, mean_reward, policy_loss)
                 except Exception as e:
                     print(f"[PPOTrainer] Progress callback error: {e}")
                 
-            # Checkpoint
+
             if (update + 1) % checkpoint_freq == 0:
                 ckpt_path = self.log_dir / f"checkpoint_{update + 1}.pt"
                 self.agent.save(str(ckpt_path))
                 
-        # Save final model
+
         self.agent.save(str(self.log_dir / "final_model.pt"))
         
-        # Save history
+
         import json
         with open(self.log_dir / "history.json", "w") as f:
             json.dump(history, f, indent=2)
