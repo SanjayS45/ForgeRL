@@ -207,6 +207,46 @@ async def delete_dataset(name: str):
     path.unlink()
     return {"message": f"Dataset {name} deleted"}
 
+@app.get("/api/datasets/{name}/download")
+async def download_dataset(name: str):
+    
+    path = get_datasets_dir() / f"{name}.pkl"
+    
+    if not path.exists():
+        raise HTTPException(404, "Dataset not found")
+        
+    return FileResponse(path, filename=f"{name}.pkl", media_type="application/octet-stream")
+
+@app.get("/api/datasets/{name}/stats")
+async def get_dataset_stats(name: str):
+    
+    path = get_datasets_dir() / f"{name}.pkl"
+    
+    if not path.exists():
+        raise HTTPException(404, "Dataset not found")
+        
+    try:
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        
+        instructions = [d[0] for d in data]
+        unique_instructions = list(set(instructions))
+        
+        traj_lengths = [len(d[1]) for d in data]
+        
+        return {
+            "name": name,
+            "num_pairs": len(data),
+            "unique_instructions": len(unique_instructions),
+            "instruction_list": unique_instructions[:20],
+            "avg_trajectory_length": sum(traj_lengths) / len(traj_lengths) if traj_lengths else 0,
+            "min_trajectory_length": min(traj_lengths) if traj_lengths else 0,
+            "max_trajectory_length": max(traj_lengths) if traj_lengths else 0,
+            "file_size_mb": path.stat().st_size / (1024 * 1024),
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Error loading dataset: {str(e)}")
+
 @app.get("/api/datasets/{name}/samples")
 async def get_dataset_samples(name: str, n: int = 5):
     
