@@ -137,6 +137,36 @@ Access the dashboard at `http://localhost:5173`
 
 3. Update `netlify.toml` with your backend URL
 
+## 📦 Available Datasets
+
+Pre-generated datasets for training:
+
+| Dataset | Task | Pairs | Description |
+|---------|------|-------|-------------|
+| `reach_v3_large.pkl` | reach-v3 | 5,000 | Large reach task dataset |
+| `push_v3_dataset.pkl` | push-v3 | 2,000 | Push task dataset |
+| `pick_place_v3_dataset.pkl` | pick-place-v3 | 2,000 | Pick and place dataset |
+| `door_open_v3_dataset.pkl` | door-open-v3 | 1,500 | Door opening dataset |
+| `drawer_open_v3_dataset.pkl` | drawer-open-v3 | 1,500 | Drawer opening dataset |
+| `multi_task_9k.pkl` | Multiple | 9,000 | Combined multi-task dataset |
+
+### Generate Custom Dataset
+
+```bash
+python scripts/generate_large_dataset.py \
+    --task reach-v3 \
+    --num-pairs 5000 \
+    --output experiments/my_dataset.pkl
+```
+
+### Combine Datasets
+
+```bash
+python scripts/combine_datasets.py \
+    --inputs experiments/reach*.pkl experiments/push*.pkl \
+    --output experiments/combined.pkl
+```
+
 ## 📊 Dataset Format
 
 Preference datasets use the format:
