@@ -5,39 +5,35 @@ import metaworld
 
 class MetaWorldEnv(gym.Env):
     
-    
     def __init__(
         self,
         task_name: str = "reach-v3",
         seed: int = 42,
         render_mode: Optional[str] = None,
+        custom_goal: Optional[List[float]] = None,
     ):
         super().__init__()
         
         self.task_name = task_name
         self.seed_value = seed
         self.render_mode = render_mode
-        
+        self.custom_goal = custom_goal
 
         self.ml1 = metaworld.ML1(task_name, seed=seed)
-        
 
         env_cls = self.ml1.train_classes[task_name]
-        
 
         self._env = env_cls(render_mode=render_mode)
-        
 
         task = self.ml1.train_tasks[0]
         self._env.set_task(task)
-        
 
         self.observation_space = self._env.observation_space
         self.action_space = self._env.action_space
-        
 
         self._current_task_idx = 0
         self._tasks = self.ml1.train_tasks
+        self._goal_position = None
         
     def reset(
         self,
@@ -47,7 +43,6 @@ class MetaWorldEnv(gym.Env):
         
         if seed is not None:
             np.random.seed(seed)
-            
 
         result = self._env.reset(seed=seed)
         
@@ -56,8 +51,35 @@ class MetaWorldEnv(gym.Env):
         else:
             obs = result
             info = {}
+        
+        if self.custom_goal is not None:
+            self._goal_position = np.array(self.custom_goal)
+            obs = self._inject_goal_into_obs(obs)
+            info['custom_goal'] = self._goal_position.tolist()
+        else:
+            self._goal_position = self._extract_goal_from_obs(obs)
+            
+        info['goal_position'] = self._goal_position.tolist() if self._goal_position is not None else None
             
         return obs, info
+    
+    def _extract_goal_from_obs(self, obs: np.ndarray) -> np.ndarray:
+        if len(obs) >= 39:
+            return obs[36:39].copy()
+        return None
+    
+    def _inject_goal_into_obs(self, obs: np.ndarray) -> np.ndarray:
+        if self._goal_position is not None and len(obs) >= 39:
+            obs = obs.copy()
+            obs[36:39] = self._goal_position
+        return obs
+    
+    def set_custom_goal(self, goal: List[float]):
+        self.custom_goal = goal
+        self._goal_position = np.array(goal)
+    
+    def get_goal_position(self) -> Optional[np.ndarray]:
+        return self._goal_position
     
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         
@@ -192,9 +214,20 @@ def make_metaworld_env(
     instruction_encoder: Optional[callable] = None,
     device: str = "cpu",
     render_mode: Optional[str] = None,
+    custom_goal: Optional[List[float]] = None,
+    custom_goals: Optional[List[List[float]]] = None,
 ) -> gym.Env:
     
-    env = MetaWorldEnv(task_name=task_name, seed=seed, render_mode=render_mode)
+    goal_to_use = custom_goal
+    if custom_goals is not None and len(custom_goals) > 0:
+        goal_to_use = custom_goals[np.random.randint(len(custom_goals))]
+    
+    env = MetaWorldEnv(
+        task_name=task_name, 
+        seed=seed, 
+        render_mode=render_mode,
+        custom_goal=goal_to_use,
+    )
     
     if reward_model is not None and instruction is not None:
         if instruction_encoder is None:
@@ -210,4 +243,38 @@ def make_metaworld_env(
         )
         
     return env
+
+
+def generate_goal_conditioned_trajectory(
+    env: gym.Env,
+    goal: List[float],
+    horizon: int = 50,
+    noise_scale: float = 0.1,
+) -> List[Tuple[np.ndarray, np.ndarray]]:
+    
+    if hasattr(env, 'set_custom_goal'):
+        env.set_custom_goal(goal)
+    
+    obs, _ = env.reset()
+    trajectory = []
+    
+    for _ in range(horizon):
+        goal_pos = np.array(goal)
+        ee_pos = obs[:3] if len(obs) >= 3 else np.zeros(3)
+        
+        direction = goal_pos - ee_pos
+        direction = direction / (np.linalg.norm(direction) + 1e-8)
+        
+        action = np.zeros(env.action_space.shape[0])
+        action[:3] = direction * 0.5
+        action = action + np.random.randn(*action.shape) * noise_scale
+        action = np.clip(action, -1, 1)
+        
+        trajectory.append((obs.copy(), action.copy()))
+        obs, _, terminated, truncated, _ = env.step(action)
+        
+        if terminated or truncated:
+            break
+    
+    return trajectory
 
