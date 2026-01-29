@@ -769,18 +769,27 @@ export default function App() {
                 
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {datasets.map(ds => (
-                    <button
+                    <div
                       key={ds.name}
-                      onClick={() => selectDataset(ds)}
-                      className={`w-full text-left p-2 rounded-lg text-xs transition ${
+                      className={`w-full p-2 rounded-lg text-xs transition flex items-center justify-between ${
                         selectedDataset === ds.name
                           ? 'bg-neon-green/20 border border-neon-green/40 text-neon-green'
                           : 'bg-black/30 hover:bg-black/50 border border-transparent text-emerald-400'
                       }`}
                     >
-                      <p className="font-medium">{ds.name}</p>
-                      <p className="text-emerald-700">{ds.num_pairs?.toLocaleString()} pairs</p>
-                    </button>
+                      <button onClick={() => selectDataset(ds)} className="text-left flex-1">
+                        <p className="font-medium">{ds.name}</p>
+                        <p className="text-emerald-700">{ds.num_pairs?.toLocaleString()} pairs</p>
+                      </button>
+                      <a 
+                        href={`${API_BASE}/datasets/${ds.name}/download`}
+                        className="p-1 hover:bg-neon-green/20 rounded"
+                        title="Download dataset"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Download size={12} />
+                      </a>
+                    </div>
                   ))}
                 </div>
                 
@@ -789,6 +798,7 @@ export default function App() {
                     <span>Instructions: {datasetDetails.num_instructions}</span>
                     <span>Obs: {datasetDetails.obs_dim}D</span>
                     <span>Act: {datasetDetails.act_dim}D</span>
+                    <span>Size: {(datasetDetails.path ? 'Available' : 'N/A')}</span>
                   </div>
                 )}
               </div>
@@ -1257,21 +1267,31 @@ export default function App() {
                 </div>
               </div>
 
-              {}
               <div className="bg-matrix-card rounded-xl border border-neon-green/10 p-4">
                 <h3 className="text-sm font-semibold mb-3 text-neon-green">LIVE DATA</h3>
-                {currentTrajectory[currentStep] && (
+                {currentTrajectory[currentStep] && (() => {
+                  const ee = currentTrajectory[currentStep][0].slice(0, 3);
+                  const goal = currentTrajectory[currentStep][0].slice(-3);
+                  const dist = Math.sqrt(ee.reduce((sum, v, i) => sum + Math.pow(v - goal[i], 2), 0));
+                  const isClose = dist < 0.05;
+                  return (
                   <div className="space-y-3 font-mono text-xs">
+                    <div className={`p-2 rounded-lg ${isClose ? 'bg-neon-green/20 border border-neon-green/40' : 'bg-red-500/10 border border-red-500/20'}`}>
+                      <p className="text-emerald-700 mb-1">Distance to Goal</p>
+                      <p className={`text-lg font-bold ${isClose ? 'text-neon-green' : 'text-red-400'}`}>
+                        {dist.toFixed(4)} {isClose && '✓ REACHED'}
+                      </p>
+                    </div>
                     <div>
                       <p className="text-emerald-700 mb-1">End Effector (XYZ)</p>
                       <p className="text-neon-green">
-                        [{currentTrajectory[currentStep][0].slice(0, 3).map(v => v.toFixed(4)).join(', ')}]
+                        [{ee.map(v => v.toFixed(4)).join(', ')}]
                       </p>
                     </div>
                     <div>
                       <p className="text-emerald-700 mb-1">Goal Position</p>
                       <p className="text-red-400">
-                        [{currentTrajectory[currentStep][0].slice(-3).map(v => v.toFixed(4)).join(', ')}]
+                        [{goal.map(v => v.toFixed(4)).join(', ')}]
                       </p>
                     </div>
                     <div>
@@ -1280,6 +1300,15 @@ export default function App() {
                         [{currentTrajectory[currentStep][1].map(v => v.toFixed(4)).join(', ')}]
                       </p>
                     </div>
+                    <div className="pt-2 border-t border-neon-green/10">
+                      <p className="text-emerald-700 mb-1">Step Progress</p>
+                      <div className="w-full bg-black/50 rounded-full h-2">
+                        <div 
+                          className="bg-neon-green h-2 rounded-full transition-all"
+                          style={{ width: `${((currentStep + 1) / currentTrajectory.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
                     {customTargets.length > 0 && (
                       <div className="pt-2 border-t border-neon-green/10">
                         <p className="text-emerald-700 mb-1">Custom Targets</p>
@@ -1287,7 +1316,8 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
               </div>
 
               {}
