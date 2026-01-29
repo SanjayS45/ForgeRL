@@ -311,3 +311,58 @@ def _save_csv(data: Dataset, path: Path):
                 "traj_b": base64.b64encode(pickle.dumps(traj_b)).decode(),
             })
 
+
+def extract_goals_from_trajectory(trajectory: Trajectory) -> List[np.ndarray]:
+    goals = []
+    for obs, _ in trajectory:
+        if len(obs) >= 39:
+            goal = obs[36:39].copy()
+            goals.append(goal)
+    return goals
+
+def extract_goals_from_dataset(data: Dataset) -> List[np.ndarray]:
+    all_goals = []
+    for _, traj_a, traj_b in data:
+        goals_a = extract_goals_from_trajectory(traj_a)
+        goals_b = extract_goals_from_trajectory(traj_b)
+        if goals_a:
+            all_goals.append(goals_a[0])
+        if goals_b:
+            all_goals.append(goals_b[0])
+    return all_goals
+
+def compute_final_distances(data: Dataset) -> Dict[str, List[float]]:
+    distances_good = []
+    distances_bad = []
+    
+    for _, traj_good, traj_bad in data:
+        if traj_good:
+            final_obs = traj_good[-1][0]
+            ee_pos = final_obs[:3]
+            goal_pos = final_obs[36:39] if len(final_obs) >= 39 else final_obs[-3:]
+            distances_good.append(float(np.linalg.norm(ee_pos - goal_pos)))
+        
+        if traj_bad:
+            final_obs = traj_bad[-1][0]
+            ee_pos = final_obs[:3]
+            goal_pos = final_obs[36:39] if len(final_obs) >= 39 else final_obs[-3:]
+            distances_bad.append(float(np.linalg.norm(ee_pos - goal_pos)))
+    
+    return {
+        "good_trajectories": distances_good,
+        "bad_trajectories": distances_bad,
+        "avg_good": np.mean(distances_good) if distances_good else 0,
+        "avg_bad": np.mean(distances_bad) if distances_bad else 0,
+    }
+
+def filter_successful_trajectories(data: Dataset, threshold: float = 0.05) -> Dataset:
+    filtered = []
+    for instr, traj_good, traj_bad in data:
+        if traj_good:
+            final_obs = traj_good[-1][0]
+            ee_pos = final_obs[:3]
+            goal_pos = final_obs[36:39] if len(final_obs) >= 39 else final_obs[-3:]
+            dist = np.linalg.norm(ee_pos - goal_pos)
+            if dist < threshold:
+                filtered.append((instr, traj_good, traj_bad))
+    return filtered
